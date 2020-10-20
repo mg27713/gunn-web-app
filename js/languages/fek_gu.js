@@ -29,7 +29,7 @@ export default {
     'barcode-desc':
       'Click on the eye icon to display; turn up your screen brightness to the max when scanning just in case. Edits are saved automatically. For the curious, student ID cards use Code 39, which you can read about on {wikipedia|Wikipedia}.',
     bell: 'Virtual bell',
-    'bell-volume': 'Set the volume to zero to disable.',
+    'bell-volume': 'Set the volume to 0 to disable.',
     browsers:
       'UGWA only aims to support the latest versions of Chrome and iOS Safari; others are low-priority.',
     bugs: 'Bug reports',
@@ -58,7 +58,7 @@ export default {
       '{name|Other browsers}—click the star button in the address bar or right click the tab and select "Pin tab"',
     'disable-lists': 'Disable club/staff lists',
     'edit-asgn': 'Assignment properties',
-    'edit-h': 'Set period 8 times',
+    'edit-h': 'Set period 8 ahomen',
     errors: 'Runtime error log',
     'export-copy': 'copy export code',
     'export-file': 'download export code',
@@ -162,7 +162,7 @@ export default {
     support: 'Student resources',
     theme: 'Theme',
     'this-is-joke': '(This is a joke.)',
-    'time-formatting': 'Time formatting',
+    'time-formatting': 'Ahom formatting',
     'title-compact': 'Tab title compactness',
     'toggle-pd-add-asgn': 'Show "Add assignment" button on period cards?',
     transfer: 'Cross-device settings transfer',
