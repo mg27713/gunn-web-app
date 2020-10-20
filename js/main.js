@@ -2,18 +2,21 @@
 
 /**
  * URL params
- * @param {section.js} section - the section to be viewed
- * @param {lists.js} club-search - default search content in club search bar
- * @param {lists.js} staff-search - deault search content in staff search bar
- * @param {schedule.js} date - the date whose schedule is to be viewed
- * @param {barcodes.js} barcode - the barcode to display
+ * @param {section} section.js - the section to be viewed
+ * @param {club-search} lists.js - default search content in club search bar
+ * @param {staff-search} lists.js - default search content in staff search bar
+ * @param {show-club} lists.js - default club to show on load
+ * @param {show-staff} lists.js - default staff member to show on load
+ * @param {date} schedule.js - the date whose schedule is to be viewed
+ * @param {barcode} barcodes.js - the barcode to display
+ * @param {all-langs} l10n.js - show all test and WIP languages
  */
 
 // ?for=appdesign so that Ugwita cache doesn't conflict
 import { toAlternateSchedules } from './altScheduleGenerator.js?for=appdesign'
 import { setDaysMonths } from './app.js'
 import { initBarcodes } from './barcodes.js'
-import { initFooter, onOptionsTab } from './footer.js'
+import { initFooter, onSection } from './footer.js'
 import {
   availableLangs,
   currentLang,
@@ -34,13 +37,18 @@ import {
 import { zoomImage } from '../touchy/rotate1.js'
 import {
   ALT_KEY,
+  apiKey,
+  closeDialog,
   cookie,
   currentTime,
   firstDay,
+  getPsas,
+  googleCalendarId,
   LAST_YEARS_ALT_KEY,
   lastDay,
   logError,
   now,
+  showDialog,
   toEach
 } from './utils.js'
 
@@ -67,18 +75,20 @@ window.initMap = initMap
 // BEGIN MASSIVE PASTE FROM UGWITA
 const calendarURL =
   'https://www.googleapis.com/calendar/v3/calendars/' +
-  encodeURIComponent('u5mgb2vlddfj70d7frf3r015h0@group.calendar.google.com') +
+  googleCalendarId +
   '/events?singleEvents=true&fields=' +
   encodeURIComponent(
     'items(description,end(date,dateTime),start(date,dateTime),summary)'
   ) +
-  '&key=AIzaSyDBYs4DdIaTjYx5WDz6nfdEAftXuctZV0o'
+  '&key=' +
+  apiKey
 const keywords = [
   'self',
   'schedule',
   'extended',
   'holiday',
   'no students',
+  'no school',
   'break',
   'development'
 ]
@@ -172,8 +182,7 @@ function main () {
         initGradeCalc,
         initSaveCodeManager,
         initMaps,
-        initChat,
-        initCoronavirusClose
+        initChat
       ])
       try {
         initScheduleWhenReady()
@@ -199,18 +208,6 @@ function attemptFns (fns) {
   }
 }
 
-// TEMP for school closure
-function initCoronavirusClose () {
-  const wrapper = document.getElementById('coronavirus-window')
-  const closeBtn = document.getElementById('close-coronavirus')
-  wrapper.addEventListener('click', e => {
-    if (e.target === wrapper || e.target === closeBtn) {
-      document.body.removeChild(wrapper)
-    }
-  })
-  // wrapper.classList.remove('coronavirus-ended')
-}
-
 function initScheduleWhenReady () {
   const manualAltSchedulesProm = getManualAlternateSchedules()
   return schedulesReady.then(() => {
@@ -219,7 +216,7 @@ function initScheduleWhenReady () {
 }
 
 function makeNavBarRipple () {
-  ripple('#footer > ul > li, .material')
+  ripple('#footer .footer-item, .material')
 }
 
 function initTabfocus () {
@@ -228,6 +225,8 @@ function initTabfocus () {
     if (e.keyCode === 9 || e.keyCode === 13) {
       document.body.classList.add('tab-focus')
       tabFocus = true
+    } else if (e.keyCode === 27) {
+      closeDialog()
     }
   })
   document.addEventListener('keyup', e => {
@@ -285,13 +284,14 @@ function initSecondsCounter () {
 }
 
 function initPSA () {
-  fetch('./psa/psas.json')
-    .then(r => (r.ok ? r.json() : Promise.reject(r.status)))
+  getPsas()
     .then(psaData => {
       const psaContent = document.getElementById('psa')
       const prevPsa = document.getElementById('prev-psa')
       const nextPsa = document.getElementById('next-psa')
+      const markAllUnread = document.getElementById('all-unread')
       const notifBadge = document.getElementById('notif')
+      const newPsaCount = document.getElementById('new-psa-count')
       const newBadge = document.getElementById('new-psa')
       const psas = []
       const lastPsa = cookie.getItem('[gunn-web-app] scheduleapp.psa')
@@ -302,10 +302,12 @@ function initPSA () {
         if (!~lastRead) {
           lastRead = -1
           currentPsa = 0
-          notifBadge.style.display = 'block'
+          notifBadge.style.display = 'flex'
+          newPsaCount.textContent = psaData.length
         } else if (lastRead !== psaData.length - 1) {
           currentPsa = lastRead + 1
-          notifBadge.style.display = 'block'
+          notifBadge.style.display = 'flex'
+          newPsaCount.textContent = psaData.length - lastRead - 1
         } else {
           currentPsa = lastRead
         }
@@ -336,14 +338,19 @@ function initPSA () {
                 '[gunn-web-app] scheduleapp.psa',
                 psaData[lastRead]
               )
+              const unreadCount = psaData.length - lastRead - 1
+              markAllUnread.style.display =
+                unreadCount > 1 ? 'inline-flex' : 'none'
               if (lastRead === psaData.length - 1) {
                 notifBadge.style.display = null
+              } else {
+                newPsaCount.textContent = unreadCount
               }
             }
           }
         })
       }
-      onOptionsTab.then(() => {
+      onSection.options.then(() => {
         displayPsa(currentPsa)
       })
       prevPsa.addEventListener('click', e => {
@@ -351,6 +358,9 @@ function initPSA () {
       })
       nextPsa.addEventListener('click', e => {
         if (currentPsa < psaData.length - 1) displayPsa(++currentPsa)
+      })
+      markAllUnread.addEventListener('click', e => {
+        displayPsa((currentPsa = psaData.length - 1))
       })
     })
     .catch(err => {
@@ -469,6 +479,13 @@ function initControlCentre () {
   })
   document.getElementById('trick-cache').addEventListener('click', e => {
     window.location = '?' + currentTime()
+  })
+  document.getElementById('kill-sw').addEventListener('click', e => {
+    navigator.serviceWorker.getRegistrations().then(regis =>
+      regis.map(regis => {
+        if (regis.scope.includes('gunn-web-app')) return regis.unregister()
+      })
+    )
   })
 }
 
@@ -716,12 +733,13 @@ function showIOSDialog () {
     !cookie.getItem('[gunn-web-app] no-thx-ios')
   ) {
     const theThing = document.getElementById('ios-add-to-home-screen')
-    theThing.classList.add('show')
+    showDialog(theThing)
     if (!ua.includes('Version/')) theThing.classList.add('not-ios-safari')
     if (ua.includes('iPad')) theThing.classList.add('ipad')
     document.getElementById('ios-no-thanks').addEventListener('click', e => {
       theThing.classList.add('ok')
       cookie.setItem('[gunn-web-app] no-thx-ios', true)
+      closeDialog()
     })
   }
 }

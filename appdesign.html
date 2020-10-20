@@ -9,7 +9,7 @@
       window.logError = function (errorText) {
         if (!window.errors) {
           window.errors =
-            '[!] If this covers your screen, then UGWA has crashed! Please send a screenshot or copy and paste this error to sy24484@pausd.us\n'
+            '[!] If this covers your screen, then UGWA has crashed! Please send a screenshot or copy and paste this error to seanthesheep22@outlook.com\n'
         }
         window.errors += '\n' + errorText
         if (window.errorLogger) window.errorLogger.value = window.errors
@@ -149,13 +149,15 @@
       // setCurrentTime(() => new Date(2020, 2, 10, 13, 23).getTime())
       // setCurrentTime(() => Date.now() + 1000 * 60 * 60 * 24 * 4.7)
 
-      // const start = Date.now()
-      // // const baseTime = new Date(2020, 8, 21, 10, 40).getTime()
-      // const baseTime = new Date().getTime()
-      // const speed = 100
-      // setCurrentTime(() => {
-      //   return (Date.now() - start) * speed + baseTime
-      // })
+      /*
+      const start = Date.now()
+      // const baseTime = new Date(2020, 8, 23, 11, 39, 50).getTime()
+      const baseTime = new Date().getTime()
+      const speed = 1000
+      setCurrentTime(() => {
+        return (Date.now() - start) * speed + baseTime
+      })
+      //*/
       window.setCurrentTime = setCurrentTime
 
       const betaBadge = document.createElement('span')
@@ -182,58 +184,33 @@
     </script>
     <!-- /NOAPPDESIGN -->
 
-    <!-- TEMP for school closure -->
-    <div class="coronavirus-cover coronavirus-ended" id="coronavirus-window">
-      <div class="coronavirus-mask">
-        <div class="coronavirus-content">
-          <h1 class="coronavirus-heading" data-l10n="coronavirus-heading"></h1>
-          <p data-l10n="coronavirus-subtitle"></p>
-          <div class="coronavirus-links">
-            <a
-              class="material ripple-light"
-              href="https://www.pausd.org/explore-pausd/news/categories/coronavirus"
-              target="_blank"
-              rel="noopener noreferrer"
-              data-l10n="coronavirus-pausd"
-            ></a>
-          </div>
-          <button
-            class="material"
-            id="close-coronavirus"
-            data-l10n="close"
-          ></button>
-        </div>
-        <div class="mask-strap strap-i"></div>
-        <div class="mask-strap strap-ii"></div>
-        <div class="mask-strap strap-iii"></div>
-        <div class="mask-strap strap-iv"></div>
-      </div>
-    </div>
-
+    <!-- Material icon codepoints: https://github.com/google/material-design-icons/blob/1ea7cb45a77b8b5979b12627b27a3999fbe4353a/iconfont/codepoints -->
     <div id="footer">
       <ul>
-        <li data-section="utilities" tabindex="0">
+        <li data-section="utilities" tabindex="0" class="footer-item">
           <i class="material-icons">&#xE869;</i>
           <span data-l10n="utilities"></span>
         </li>
-        <li data-section="clubs" tabindex="0">
+        <li data-section="clubs" tabindex="0" class="footer-item">
           <i class="material-icons">&#xE886;</i>
           <span data-l10n="clubs"></span>
         </li>
-        <li data-section="schedule" tabindex="0">
+        <li data-section="schedule" tabindex="0" class="footer-item">
           <i class="material-icons">&#xE8B5;</i>
           <span data-l10n="schedule"></span>
         </li>
-        <li data-section="staff" tabindex="0">
+        <li data-section="staff" tabindex="0" class="footer-item">
           <i class="material-icons">&#xE7FB;</i>
           <span data-l10n="staff"></span>
         </li>
-        <li data-section="options" tabindex="0">
-          <i class="material-icons">
-            <div id="notif"></div>
-            &#xE8B8;
-          </i>
+        <li data-section="options" tabindex="0" class="footer-item">
+          <i class="material-icons">&#xE8B8;</i>
           <span data-l10n="options"></span>
+        </li>
+        <li id="notif">
+          <span data-l10n="new-psa"
+            ><span id="new-psa-count" data-l10n-arg="count"></span
+          ></span>
         </li>
       </ul>
     </div>
@@ -260,7 +237,8 @@
 
       <h1>
         <span data-l10n="support"></span>
-        <button class="material icon to-right">
+        <span class="flex"></span>
+        <button class="material icon">
           <i class="material-icons" id="hide-support">expand_less</i>
         </button>
       </h1>
@@ -300,7 +278,7 @@
 
       <a
         href="http://gpac.tk"
-        class="ad"
+        class="material raised ad"
         target="_blank"
         rel="noopener noreferrer"
         data-l10n="martin-ad"
@@ -333,6 +311,7 @@
       <div style="display: none;">
         <h1>
           <span data-l10n="comm"></span>
+          <span class="flex"></span>
           <a
             href="./prev-chats.html"
             target="_blank"
@@ -388,8 +367,30 @@
           rel="noopener noreferrer"
           data-l10n-arg="link"
         ></a>
+        <a
+          href="https://docs.google.com/document/d/1WpmgjcuRaHqc1jOL19pTNlHNJM3pwsEYxjYU0fy511Q/"
+          target="_blank"
+          rel="noopener noreferrer"
+          data-l10n-arg="doc-link"
+        ></a>
       </p>
-
+      <div id="club-ads-wrapper">
+        <ul id="club-ads"></ul>
+        <div id="club-ad-wrapper">
+          <h1>
+            <span id="club-name"></span>
+            <button class="material" id="show-club-from-ad">More info</button>
+            <button class="material icon" id="close-club-ad">
+              <i class="material-icons">&#xe5cd;</i>
+            </button>
+          </h1>
+          <!-- https://stackoverflow.com/questions/27723423/youtube-iframe-embed-full-screen -->
+          <iframe
+            id="club-ad-viewer"
+            allowfullscreen="allowfullscreen"
+          ></iframe>
+        </div>
+      </div>
       <ul class="material-list three-line short clickables list"></ul>
       <div class="lists-enabled center">
         <p data-l10n="lists-disabled"></p>
@@ -469,6 +470,14 @@
         <button class="material icon" id="next-psa" disabled>
           <i class="material-icons">&#xE5CC;</i>
         </button>
+        <button
+          class="material"
+          id="all-unread"
+          data-l10n="mark-psas-read"
+          style="display: none;"
+        >
+          <i class="material-icons" data-l10n-arg="icon">&#xe5dd;</i>
+        </button>
         <span id="new-psa" data-l10n="new"></span>
       </h1>
       <div
@@ -516,15 +525,15 @@
       <h1 data-l10n="time-formatting"></h1>
       <div class="radios-wrapper">
         <p class="radio-wrapper">
-          <input type="radio" name="hour" value="h12" class="material-radio" />
+          <input type="radio" name="hour" value="12" class="material-radio" />
           <label data-l10n="12h"></label>
         </p>
         <p class="radio-wrapper">
-          <input type="radio" name="hour" value="h24" class="material-radio" />
+          <input type="radio" name="hour" value="24" class="material-radio" />
           <label data-l10n="24h"></label>
         </p>
         <p class="radio-wrapper is-joke">
-          <input type="radio" name="hour" value="h0" class="material-radio" />
+          <input type="radio" name="hour" value="0" class="material-radio" />
           <label data-l10n="no-hour"></label>
           <span class="joke-explanation" data-l10n="this-is-joke"></span>
         </p>
@@ -551,14 +560,7 @@
           <label data-l10n="numbers"></label>
         </p>
       </div>
-      <p data-l10n="notif-time-before">
-        <span
-          class="material-dropdown"
-          id="notif-time-before"
-          data-l10n-arg="time"
-        ></span>
-      </p>
-      <div class="center">
+      <div class="center" style="display: none;">
         <button
           class="material ripple-light raised"
           id="disable-lists"
@@ -572,36 +574,36 @@
       </div>
       <a id="periodcustomisermarker"></a>
       <p>
-        <label>
+        <label class="material-switch-wrapper">
           <span class="material-switch" id="hide-preps" tabindex="0"></span>
           <span data-l10n="hide-preps"></span>
         </label>
       </p>
       <p>
-        <label>
+        <label class="material-switch-wrapper">
           <span class="material-switch" id="allow-swipe" tabindex="0"></span>
           <span data-l10n="allow-swipe"></span>
         </label>
       </p>
       <!-- <p>
-        <label>
+        <label class="material-switch-wrapper">
           <span class="material-switch" id="self" tabindex="0"></span>
           <span data-l10n="show-self-toggle"></span>
         </label>
       </p> -->
       <p>
-        <label>
+        <label class="material-switch-wrapper">
           <span class="material-switch" id="show0" tabindex="0"></span>
           <span data-l10n="show0"></span>
         </label>
       </p>
       <p>
-        <label>
+        <label class="material-switch-wrapper">
           <span class="material-switch" id="show-h" tabindex="0"></span>
           <span data-l10n="show-h"></span>
         </label>
       </p>
-      <!-- <button class="material raised" id="edit-h" data-l10n="edit-h"></button> -->
+      <button class="material raised" id="edit-h" data-l10n="edit-h"></button>
       <p data-l10n="open-link-before">
         <span
           class="material-dropdown"
@@ -611,15 +613,36 @@
         <strong data-l10n-arg="emphasis"></strong>
       </p>
       <p>
-        <label>
+        <label class="material-switch-wrapper">
           <span class="material-switch" id="use-iframe" tabindex="0"></span>
           <span data-l10n="use-iframe"></span>
         </label>
       </p>
 
+      <h1 data-l10n="notifications"></h1>
+      <p data-l10n="notif-time-before">
+        <span
+          class="material-dropdown"
+          id="notif-time-before"
+          data-l10n-arg="time"
+        ></span>
+      </p>
+      <h2 data-l10n="bell"></h2>
+      <p data-l10n="bell-volume"></p>
+      <div class="bell-volume">
+        <button class="material icon" id="play-bell" data-l10n-arg="play">
+          <i class="material-icons">&#xe037;</i>
+        </button>
+        <span
+          class="material-dropdown"
+          id="bell-volume-marker"
+          data-l10n-arg="volume"
+        ></span>
+      </div>
+
       <h1 data-l10n="assignments"></h1>
       <p>
-        <label>
+        <label class="material-switch-wrapper">
           <span
             class="material-switch"
             id="toggle-pd-add-asgn"
@@ -771,14 +794,14 @@
 
       <div class="block-of-text">
         <h1 data-l10n="add-ugwa"></h1>
-        <p data-l10n="desktop-instruct">
-          <strong data-l10n-arg="name"></strong>
-        </p>
-        <p data-l10n="chromebook-instruct">
-          <strong data-l10n-arg="name"></strong>
-        </p>
         <p data-l10n="ios-instruct"><strong data-l10n-arg="name"></strong></p>
         <p data-l10n="android-instruct">
+          <strong data-l10n-arg="name"></strong>
+        </p>
+        <p data-l10n="chrome-instruct">
+          <strong data-l10n-arg="name"></strong>
+        </p>
+        <p data-l10n="desktop-instruct">
           <strong data-l10n-arg="name"></strong>
         </p>
 
@@ -791,7 +814,7 @@
             data-l10n-arg="gh"
           ></a>
           <a
-            href="mailto:sy24484@pausd.us"
+            href="mailto:seanthesheep22@outlook.com"
             target="_blank"
             rel="noopener noreferrer"
             data-l10n-arg="email"
@@ -848,6 +871,12 @@
             data-l10n-arg="tga-android"
           ></a>
           <a
+            href="https://kach.github.io/bellhop/"
+            target="_blank"
+            rel="noopener noreferrer"
+            data-l10n-arg="bellhop"
+          ></a>
+          <a
             href="https://sordamente.github.io/nugwa/"
             target="_blank"
             rel="noopener noreferrer"
@@ -858,6 +887,12 @@
             target="_blank"
             rel="noopener noreferrer"
             data-l10n-arg="hw-central"
+          ></a>
+          <a
+            href="https://ugwa-backend.web.app/"
+            target="_blank"
+            rel="noopener noreferrer"
+            data-l10n-arg="ugwa-backend"
           ></a>
         </p>
 
@@ -873,6 +908,14 @@
         <p data-l10n="kevin-creds">
           <a
             href="https://github.com/ky28059/"
+            target="_blank"
+            rel="noopener noreferrer"
+            data-l10n-arg="name"
+          ></a>
+        </p>
+        <p data-l10n="matthew-creds">
+          <a
+            href="https://mg27713.github.io/"
             target="_blank"
             rel="noopener noreferrer"
             data-l10n-arg="name"
@@ -930,6 +973,11 @@
           id="trick-cache"
           data-l10n="trick-cache"
         ></button>
+        <button
+          class="material ripple-light raised"
+          id="kill-sw"
+          data-l10n="kill-sw"
+        ></button>
       </p>
 
       <h2 data-l10n="errors"></h2>
@@ -940,6 +988,9 @@
       <h1 data-l10n="staff-name"></h1>
       <div class="content"></div>
       <div class="buttons">
+        <a class="material icon info-permalink"
+          ><i class="material-icons">&#xe157;</i></a
+        >
         <button class="material red close" data-l10n="close"></button>
       </div>
     </div>
@@ -948,6 +999,9 @@
       <h1 data-l10n="club-name"></h1>
       <div class="content"></div>
       <div class="buttons">
+        <a class="material icon info-permalink"
+          ><i class="material-icons">&#xe157;</i></a
+        >
         <button class="material red" id="club-add-list"></button>
         <button class="material red close" data-l10n="close"></button>
       </div>
@@ -1021,6 +1075,10 @@
       </div>
     </div>
 
+    <p id="no-audio" data-l10n="click-for-audio">
+      <i class="material-icons" data-l10n-arg="icon">&#xe7f6;</i>
+    </p>
+
     <div class="ios-cover" id="ios-add-to-home-screen">
       <div class="ios-dialog">
         <h1 data-l10n="want-ugwa-normal"></h1>
@@ -1062,8 +1120,8 @@
     ></textarea>
     <noscript>
       <textarea id="error-log" class="error-log" readonly required>
-        Please turn on JavaScript for the Unofficial Gunn Web App to work.
-      </textarea>
+Please turn on JavaScript for the Unofficial Gunn Web App to work.</textarea
+      >
     </noscript>
     <script type="text/javascript">
       window.errorLogger = document.getElementById('error-log')

@@ -1,6 +1,6 @@
 /* eslint-env serviceworker */
 
-const CACHE_NAME = 'ugwa-sw-1598459987895'
+const CACHE_NAME = 'ugwa-sw-1602566029093'
 const urlsToCache = [
   './',
   'images/newmap.min.png',
@@ -25,8 +25,7 @@ const urlsToCache = [
   'js/languages/en-gt-core.js',
   'js/languages/fr.js',
   'json/alt-schedules-2020.txt',
-  // TEMP for school closure
-  'images/false-sense-of-security.svg'
+  'images/gunn-together.svg'
 ]
 
 function sendError (msg) {

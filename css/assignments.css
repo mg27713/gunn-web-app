@@ -13,6 +13,7 @@ button.material.icon.asgn-done-btn {
   margin-left: -16px;
   color: inherit;
   text-shadow: inherit;
+  flex: none;
 }
 .schedule-container .asgn-done-btn {
   transition: background-color 0.2s;
@@ -27,6 +28,7 @@ button.material.icon.asgn-done-btn {
 .asgn-line {
   font-size: 14px;
   position: relative;
+  display: flex;
 }
 .asgn-line .asgn-category {
   margin-right: 10px;
@@ -137,9 +139,6 @@ button.material.icon.asgn-done-btn {
 }
 
 /* ADD ASSIGNMENT BUTTONS */
-.asgn-upcoming .add-asgn {
-  float: right;
-}
 .add-asgn i {
   pointer-events: none;
 }
@@ -224,6 +223,5 @@ button.material.icon.asgn-done-btn {
   font-family: monospace;
 }
 button.assync-refresh {
-  float: right;
   margin-left: 10px;
 }

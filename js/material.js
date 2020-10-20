@@ -1,4 +1,4 @@
-import { currentTime, NADA, toEach } from './utils.js'
+import { closeDialog, currentTime, NADA, toEach } from './utils.js'
 
 export function ripple (elem) {
   if (typeof elem === 'string') {
@@ -220,14 +220,19 @@ export function makeDropdown (wrapper, values) {
     }
   }
 }
-export function createRange (minRange = 0, onchange = NADA, oninput = NADA) {
+export function createRange ({
+  minRange = 0,
+  onchange = NADA,
+  oninput = NADA,
+  showMin = true
+} = {}) {
   const range = document.createElement('div')
   range.classList.add('material-range')
   range.tabIndex = 0
   const minKnob = document.createElement('div')
   minKnob.classList.add('range-knob')
   minKnob.classList.add('range-min')
-  range.appendChild(minKnob)
+  if (showMin) range.appendChild(minKnob)
   const maxKnob = document.createElement('div')
   maxKnob.classList.add('range-knob')
   maxKnob.classList.add('range-max')
@@ -266,7 +271,7 @@ export function createRange (minRange = 0, onchange = NADA, oninput = NADA) {
     if (controlling) return
     rect = range.getBoundingClientRect()
     const pos = getPos(e)
-    if (pos < (min + max) / 2) {
+    if (showMin && pos < (min + max) / 2) {
       controlling = 'min'
       min = pos
     } else {
@@ -367,13 +372,7 @@ window.addEventListener(
       )
     })
     toEach('.material-dialog > .buttons > .close', t => {
-      t.addEventListener(
-        'click',
-        e => {
-          t.parentNode.parentNode.classList.remove('show')
-        },
-        false
-      )
+      t.addEventListener('click', closeDialog)
     })
   },
   false

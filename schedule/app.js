@@ -1,6 +1,5 @@
-/* global Notification */
-
 import { localize, localizeWith } from '../js/l10n.js'
+import { showClub, getClubByName } from '../js/lists.js'
 import { savedClubs } from '../js/saved-clubs.js'
 import { currentTime, escapeHTML, now } from '../js/utils.js'
 
@@ -9,8 +8,15 @@ export function setDaysMonths (newDays, newMonths) {
   days = newDays
   months = newMonths
 }
+function getDateId () {
+  const today = now()
+  // toISOString uses UTC D:
+  // Just returns a unique ID per day, so no leading zeroes or adding one to
+  // month needed
+  return `${today.getFullYear()}-${today.getMonth()}-${today.getDate()}`
+}
 const colourtoy = document.createElement('div')
-export function getFontColour (colour) {
+function isLight (colour) {
   colourtoy.style.backgroundColor = colour
   colour = colourtoy.style.backgroundColor
   colour = colour
@@ -18,14 +24,17 @@ export function getFontColour (colour) {
     .split(/,\s*/)
     .map(a => +a)
   // https://stackoverflow.com/questions/11867545/change-text-color-based-on-brightness-of-the-covered-background-area
-  return Math.round(
-    (parseInt(colour[0]) * 299 +
-      parseInt(colour[1]) * 587 +
-      parseInt(colour[2]) * 114) /
-      1000
-  ) > 150
-    ? 'rgba(0,0,0,0.8)'
-    : 'white'
+  return (
+    Math.round(
+      (parseInt(colour[0]) * 299 +
+        parseInt(colour[1]) * 587 +
+        parseInt(colour[2]) * 114) /
+        1000
+    ) > 150
+  )
+}
+export function getFontColour (colour) {
+  return isLight(colour) ? 'rgba(0,0,0,0.8)' : 'white'
 }
 export function scheduleApp (options = {}) {
   let elem
@@ -33,6 +42,12 @@ export function scheduleApp (options = {}) {
   if (options.element) elem = options.element
   else elem = document.createElement('div')
   container.classList.add('schedule-container')
+  container.addEventListener('click', e => {
+    if (e.target.dataset.club) {
+      showClub(e.target.dataset.club)
+      e.preventDefault()
+    }
+  })
   if (!options.alternates) options.alternates = {}
   if (!options.periods) options.periods = {}
   if (!options.normal) options.normal = {}
@@ -47,49 +62,6 @@ export function scheduleApp (options = {}) {
       return `${((hr - 1) % 12) + 1}:${messytime.slice(2)}${
         hr < 12 ? 'a' : 'p'
       }m`
-  }
-  const periodSymbols = {
-    Brunch: localize('symbols/brunch'),
-    Lunch: localize('symbols/lunch'),
-    Flex: localize('symbols/flex'),
-    SELF: localize('symbols/self'),
-    A: localize('symbols/period-a'),
-    B: localize('symbols/period-b'),
-    C: localize('symbols/period-c'),
-    D: localize('symbols/period-d'),
-    E: localize('symbols/period-e'),
-    F: localize('symbols/period-f'),
-    G: localize('symbols/period-g'),
-    H: localize('symbols/period-h'),
-    '0': localize('symbols/period-zero')
-  }
-  const ICON_SIZE = 256
-  const ICON_FONT = '"Roboto", sans-serif'
-  const ICON_PADDING = 0.2
-  const maxSize = ICON_SIZE * (1 - 2 * ICON_PADDING)
-  const iconCanvas = document.createElement('canvas')
-  const iconCtx = iconCanvas.getContext('2d')
-  iconCanvas.width = ICON_SIZE
-  iconCanvas.height = ICON_SIZE
-  iconCtx.textAlign = 'center'
-  iconCtx.textBaseline = 'middle'
-  function getIcon (period) {
-    const { colour, label } = getPeriod(period)
-    if (colour[0] === '#') {
-      iconCtx.fillStyle = colour
-      iconCtx.fillRect(0, 0, ICON_SIZE, ICON_SIZE)
-      iconCtx.fillStyle = getFontColour(colour)
-    } else {
-      return `./.period-images/${period}?${colour}`
-    }
-    const text = periodSymbols[period] || label
-    iconCtx.font = `${maxSize}px ${ICON_FONT}`
-    const { width } = iconCtx.measureText(text)
-    const fontSize = Math.min((maxSize * maxSize) / width, maxSize)
-    iconCtx.font = `${fontSize}px ${ICON_FONT}`
-    // It is annoying having to do fontSize * 0.1 so it looks vertically centred
-    iconCtx.fillText(text, ICON_SIZE / 2, ICON_SIZE / 2 + fontSize * 0.1)
-    return iconCanvas.toDataURL()
   }
   function getCSS (colour, id) {
     if (colour[0] === '#') {
@@ -106,6 +78,11 @@ export function scheduleApp (options = {}) {
     else return localizeWith('duration', 'times', { T: minutes })
   }
   function getPeriodSpan (period) {
+    if (period === 'GT') {
+      return `<span class="schedule-endinginperiod gt-confuse">${localize(
+        'gunn-together/name'
+      )}</span>`
+    }
     return `<span style="${getCSS(
       getPeriod(period).colour,
       period
@@ -133,10 +110,17 @@ export function scheduleApp (options = {}) {
     let summer = false
     const isSELF = isSELFDay(mez, dia)
     let periods
+    // For Gunn Together period resolution (see below)
+    const gtWeek = Math.floor(
+      (d - new Date(2020, 8 - 1, 17)) / 1000 / 60 / 60 / 24 / 7
+    )
+    // Don't touch this function because it's reimplemented under getWeek and
+    // maybe elsewhere for some reason >_<
     function getPeriodName (index) {
-      return periods[index].name === 'Flex' && isSELF
-        ? 'SELF'
-        : periods[index].name
+      if (periods[index].name === 'Flex' && isSELF) {
+        return 'SELF'
+      }
+      return periods[index].name
     }
     if (options.customSchedule) {
       periods = options.customSchedule(d, ano, mez, dia, weekday)
@@ -185,6 +169,24 @@ export function scheduleApp (options = {}) {
         }
       }
     }
+    // Putting this before hiding preps so that if you have a prep for Gunn
+    // Together it is hidden
+    periods = periods.map(period => {
+      if (period.name === 'GT') {
+        // So far: 55 6432171
+        //         0123456789
+        let name
+        if (gtWeek >= 0 && gtWeek < 2) name = 'E'
+        else if (gtWeek === 3) name = 'F'
+        else if (gtWeek < 8) name = 'ABCDEFG'[7 - gtWeek]
+        else if (gtWeek === 8) name = 'G'
+        else if (gtWeek === 9) name = 'A'
+        if (name) {
+          return { ...period, name, gunnTogether: true }
+        }
+      }
+      return period
+    })
     // putting this after it checks if the day is a school day because
     // you can have all day prep and still have H period on that day, maybe
     if (options.hidePreps) {
@@ -264,6 +266,8 @@ export function scheduleApp (options = {}) {
         )}</span>`
       }
       // QUESTION: Should there be feedback for days with only optional periods?
+      // Later QUESTION: What did I mean by "feedback"??
+      // "Feedback" as in a note that the entire day is optional.
       if (checkfuture) {
         let i
         for (i = 0; i < periods.length; i++)
@@ -331,28 +335,36 @@ export function scheduleApp (options = {}) {
         const periodName = getPeriod(
           period.name === 'Flex' && isSELF ? 'SELF' : period.name
         )
-        innerHTML += `<div class="schedule-period" style="${getCSS(
+        innerHTML += `<div class="schedule-period ${
+          period.name === 'GT' ? 'gunn-together' : ''
+        } ${isLight(periodName.colour) ? 'light' : 'dark'}" style="${getCSS(
           periodName.colour,
           period.name
-        )}"><span class="schedule-periodname">${escapeHTML(
-          periodName.label
-        )}<span class="pd-btns">${
-          options.displayAddAsgn
-            ? `<button class="material icon pd-btn add-asgn" data-pd="${
-                period.name
-              }" title="${localize(
-                'add-asgn'
-              )}"><i class="material-icons">add_task</i></button>`
-            : ''
-        }${
-          periodName.link
-            ? `<a class="material icon pd-btn" target="_blank" href="${periodName.link}" rel="noopener noreferrer"><i class="material-icons">\ue89e</i></a>`
-            : ''
-        }</span></span>`
-        if (period.gunnTogether) {
+        )}">`
+        if (period.name !== 'GT') {
+          innerHTML += `<span class="schedule-periodname">${escapeHTML(
+            periodName.label
+          )}<span class="pd-btns">${
+            options.displayAddAsgn
+              ? `<button class="material icon pd-btn add-asgn" data-pd="${
+                  period.name
+                }" title="${localize(
+                  'add-asgn'
+                )}"><i class="material-icons">add_task</i></button>`
+              : ''
+          }${
+            periodName.link
+              ? `<a class="material icon pd-btn" target="_blank" href="${periodName.link}" rel="noopener noreferrer"><i class="material-icons">\ue89e</i></a>`
+              : ''
+          }</span></span>`
+        }
+        if (period.gunnTogether || period.name === 'GT') {
           innerHTML += `<div class="gunn-together-badge">${localize(
-            'gunn-together'
+            'gunn-together/name'
           )}</div>`
+        }
+        if (period.name === 'GT') {
+          innerHTML += `<span>${localize('gunn-together/subtitle')}</span>`
         }
         innerHTML += `<span>${getHumanTime(
           ('0' + period.start.hour).slice(-2) +
@@ -402,10 +414,26 @@ export function scheduleApp (options = {}) {
             innerHTML +=
               `<span class="small-heading">${localize('lunch-clubs')}</span>` +
               clubs
-                .map(
-                  club =>
-                    `<a class="club-link" href="#" onclick="showClub(\`${club}\`);event.preventDefault()">${club}</a>`
-                )
+                .map(club => {
+                  const clubData = getClubByName && getClubByName(club)
+                  const extraData =
+                    clubData &&
+                    [
+                      clubData.link
+                        ? `<a href="${escapeHTML(
+                            clubData.link
+                          )}" target="_blank" rel="noopener noreferrer" class="join-club-link">${localize(
+                            'join'
+                          )}</a>`
+                        : null,
+                      clubData.time ? escapeHTML(clubData.time) : null
+                    ].filter(d => d)
+                  return `<span class="club-links"><a href="#" data-club="${escapeHTML(
+                    club
+                  )}">${club}</a>${
+                    extraData ? ` (${extraData.join(' &middot; ')})` : ''
+                  }</span>`
+                })
                 .join('')
           }
         }
@@ -458,29 +486,42 @@ export function scheduleApp (options = {}) {
     }
     return null
   }
-  function getNextNotif () {
-    const { timeBefore } = options.notifSettings
-    const next = getNext((pdTime, nowTime) => pdTime - timeBefore > nowTime)
-    return (
-      next && {
-        showTime: next.time - timeBefore * 1000,
-        link: next.type === 'start'
-      }
-    )
-  }
-  function getNextLinkOpen () {
-    return options.openLinkBefore !== null
-      ? getNext(
-          (pdTime, nowTime, pdName) =>
-            getPeriod(pdName).link && pdTime - options.openLinkBefore > nowTime,
-          { end: false }
-        )
-      : null
-  }
-  let nextNotif = null
-  let nextLinkOpen = null
+  const timers = []
+  const onNewDays = []
+  let lastToday = getDateId()
   const checkSpeed = 50 // Every 50 ms
   let lastMinute, timeoutID, animationID
+  function checkMinute () {
+    const currentMinute = now()
+      .toISOString()
+      .slice(0, 16)
+    if (currentMinute !== lastMinute) {
+      returnval.render()
+      lastMinute = currentMinute
+      // If it's enabled yet there's no next set, keep trying to get one. This
+      // is not very efficient but it should suffice.
+      for (const { timer, next, update } of timers) {
+        if (timer.enabled && !next) {
+          update()
+        }
+      }
+    }
+    if (options.update) {
+      timeoutID = setTimeout(checkMinute, checkSpeed)
+    } else {
+      animationID = null
+    }
+    for (const { next, onNext, update } of timers) {
+      if (next && currentTime() >= next.time) {
+        onNext()
+        update()
+      }
+    }
+    if (getDateId() !== lastToday) {
+      lastToday = getDateId()
+      for (const onNewDay of onNewDays) onNewDay()
+    }
+  }
   const returnval = {
     options,
     element: elem,
@@ -496,96 +537,6 @@ export function scheduleApp (options = {}) {
       lastMinute = now()
         .toISOString()
         .slice(0, 16)
-      function checkMinute () {
-        const currentMinute = now()
-          .toISOString()
-          .slice(0, 16)
-        if (currentMinute !== lastMinute) {
-          returnval.render()
-          lastMinute = currentMinute
-          if (options.notifSettings.enabled && !nextNotif) {
-            // Try getting next notification
-            nextNotif = getNextNotif()
-          }
-          if (options.openLinkBefore !== null && !nextLinkOpen) {
-            // Try getting next notification
-            nextLinkOpen = getNextLinkOpen()
-          }
-        }
-        if (options.update) {
-          timeoutID = setTimeout(checkMinute, checkSpeed)
-        } else {
-          animationID = null
-        }
-        if (nextNotif) {
-          if (currentTime() >= nextNotif.showTime) {
-            const today = getDate(now())
-            const currentMinute = (currentTime() - today.getTime()) / 1000 / 60
-            // Apparently getPeriodName gets the period type even though it's
-            // already in `periods[index].name` in order to deal with SELF
-            // becoming flex even though this could've been dealt with in
-            // getSchedule before returning the schedule??
-            const { periods, getPeriodName } = getSchedule(today)
-            const currentPeriod = periods.findIndex(
-              period => currentMinute < period.end.totalminutes
-            )
-            const { label, link } =
-              currentPeriod !== -1
-                ? getPeriod(getPeriodName(currentPeriod))
-                : {}
-            const text =
-              currentPeriod === -1
-                ? localize('over', 'times')
-                : currentMinute < periods[currentPeriod].start.totalminutes
-                ? localizeWith('starting', 'times', {
-                    P: label,
-                    T: getUsefulTimePhrase(
-                      Math.ceil(
-                        periods[currentPeriod].start.totalminutes -
-                          currentMinute
-                      )
-                    )
-                  })
-                : localizeWith('ending', 'times', {
-                    P: label,
-                    T: getUsefulTimePhrase(
-                      Math.ceil(
-                        periods[currentPeriod].end.totalminutes - currentMinute
-                      )
-                    )
-                  })
-            const openLink = nextNotif.link && link
-            const notification = new Notification(text, {
-              icon:
-                currentPeriod === -1
-                  ? null
-                  : getIcon(getPeriodName(currentPeriod)),
-              body: openLink ? localize('notif-click-desc') : ''
-            })
-            notification.addEventListener('click', e => {
-              e.preventDefault()
-              if (openLink) {
-                const win = window.open(link, '_blank')
-                win.focus()
-              }
-            })
-
-            nextNotif = getNextNotif()
-          }
-        }
-        if (nextLinkOpen) {
-          if (currentTime() >= nextLinkOpen.time) {
-            if (options.openLinkInIframe) {
-              const { link, label } = getPeriod(nextLinkOpen.period)
-              options.openLinkInIframe(link, label)
-            } else {
-              // https://stackoverflow.com/a/11384018
-              window.open(getPeriod(nextLinkOpen.period).link, '_blank')
-            }
-            nextLinkOpen = getNextLinkOpen()
-          }
-        }
-      }
       timeoutID = setTimeout(checkMinute, checkSpeed)
     },
     stopupdate () {
@@ -640,11 +591,25 @@ export function scheduleApp (options = {}) {
       }
       return week
     },
-    updateNextNotif () {
-      nextNotif = options.notifSettings.enabled ? getNextNotif() : null
+    addTimer (getNextFn, onNext, timer = { enabled: true }) {
+      timer.update = () => {
+        entry.next = timer.enabled ? getNextFn(getNext) : null
+        return timer
+      }
+      const entry = {
+        timer,
+        onNext: () => {
+          onNext(entry.next, { getDate, getSchedule, getUsefulTimePhrase })
+        },
+        update: timer.update,
+        next: null
+      }
+      timers.push(entry)
+      return timer
     },
-    updateNextLinkOpen () {
-      nextNotif = getNextLinkOpen()
+    onNewDay (callback, callImmediately = false) {
+      onNewDays.push(callback)
+      if (callImmediately) callback()
     },
     getPeriodSpan,
     getSchedule,
