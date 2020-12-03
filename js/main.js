@@ -1,4 +1,4 @@
-/* global google, fetch, confirm, alert, FileReader, Node */
+/* global google, fetch, confirm, alert, FileReader, Node, WebSocket */
 
 /**
  * URL params
@@ -28,12 +28,7 @@ import {
 } from './l10n.js'
 import { initLists } from './lists.js'
 import { ripple } from './material.js'
-import {
-  cacheBackground,
-  getManualAlternateSchedules,
-  initSchedule,
-  letras
-} from './schedule.js'
+import { cacheBackground, initSchedule, letras } from './schedule.js'
 import { zoomImage } from '../touchy/rotate1.js'
 import {
   ALT_KEY,
@@ -42,10 +37,13 @@ import {
   cookie,
   currentTime,
   firstDay,
+  generateID,
   getPsas,
   googleCalendarId,
   LAST_YEARS_ALT_KEY,
   lastDay,
+  loadJsonStorage,
+  loadJsonWithDefault,
   logError,
   now,
   showDialog,
@@ -135,13 +133,9 @@ const schedulesReady = cookie.getItem(ALT_KEY)
 if (cookie.getItem(LAST_YEARS_ALT_KEY)) cookie.removeItem(LAST_YEARS_ALT_KEY)
 
 document.documentElement.classList.add('hide-app')
-window.addEventListener(
-  'load',
-  e => {
-    l10nReady.then(main)
-  },
-  false
-)
+document.addEventListener('DOMContentLoaded', e => {
+  l10nReady.then(main)
+})
 
 function main () {
   document.title = localize('appname')
@@ -165,37 +159,20 @@ function main () {
     initPWA,
     initErrorLog,
     initFooter,
-    showIOSDialog
+    showIOSDialog,
+    initPSA,
+    initControlCentre,
+    initLists,
+    makeNavBarRipple,
+    initTabfocus
   ])
-  // Allow page to render the localization (seems to require two animation
-  // frames for some reason?)
-  window.requestAnimationFrame(() => {
-    window.requestAnimationFrame(() => {
-      attemptFns([
-        initPSA,
-        initControlCentre,
-        initBarcodes,
-        initLists,
-        makeNavBarRipple,
-        initTabfocus,
-        initSecondsCounter,
-        initGradeCalc,
-        initSaveCodeManager,
-        initMaps,
-        initChat
-      ])
-      try {
-        initScheduleWhenReady()
-      } catch (err) {
-        logError(err.stack || err.message || err)
-        // Yank error log back over the screen
-        const errorLog = document.getElementById('error-log')
-        errorLog.classList.remove('textarea')
-        errorLog.classList.add('error-log')
-        document.body.appendChild(errorLog)
-      }
-    })
-  })
+  onSection.utilities.then(initBarcodes)
+  onSection.schedule.then(initSecondsCounter)
+  onSection.utilities.then(initGradeCalc)
+  onSection.options.then(initSaveCodeManager)
+  onSection.utilities.then(initMaps)
+  onSection.utilities.then(initChat)
+  initScheduleWhenReady()
 }
 
 function attemptFns (fns) {
@@ -209,10 +186,7 @@ function attemptFns (fns) {
 }
 
 function initScheduleWhenReady () {
-  const manualAltSchedulesProm = getManualAlternateSchedules()
-  return schedulesReady.then(() => {
-    initSchedule(manualAltSchedulesProm)
-  })
+  return schedulesReady.then(initSchedule)
 }
 
 function makeNavBarRipple () {
@@ -299,18 +273,19 @@ function initPSA () {
       let currentPsa = lastRead
       if (lastPsa) {
         lastRead = psaData.indexOf(lastPsa)
-        if (!~lastRead) {
-          lastRead = -1
-          currentPsa = 0
-          notifBadge.style.display = 'flex'
-          newPsaCount.textContent = psaData.length
+        if (lastRead === -1) {
+          // If the last PSA is invalid or from the old HTML PSAs, just mark
+          // them all as read
+          lastRead = psaData.length - 1
+          cookie.setItem('[gunn-web-app] scheduleapp.psa', psaData[lastRead])
         } else if (lastRead !== psaData.length - 1) {
+          // Their last read PSA is not the newest one (ie, there's a new PSA)
           currentPsa = lastRead + 1
           notifBadge.style.display = 'flex'
           newPsaCount.textContent = psaData.length - lastRead - 1
-        } else {
-          currentPsa = lastRead
         }
+      } else {
+        cookie.setItem('[gunn-web-app] scheduleapp.psa', psaData[lastRead])
       }
       function displayPsa (id) {
         prevPsa.disabled = id === 0
@@ -513,15 +488,17 @@ function initSaveCodeManager () {
   function importCode (code) {
     if (!confirm(localize('import-warning'))) return
     try {
-      const values = JSON.parse(code)
+      const values = loadJsonWithDefault(code, {})
       Object.keys(values).forEach(key => {
         cookie.setItem(
           key === EXCEPT ? key : UGWA_COOKIE_PREFIX + key,
           values[key]
         )
       })
-      const periodCustomizations = JSON.parse(
-        cookie.getItem('[gunn-web-app] scheduleapp.options')
+      const periodCustomizations = loadJsonStorage(
+        '[gunn-web-app] scheduleapp.options',
+        [],
+        Array.isArray
       )
       Promise.all(
         periodCustomizations.map((entry, i) => {
@@ -572,6 +549,24 @@ function initSaveCodeManager () {
   })
 }
 
+let userId = cookie.getItem('[gunn-web-app] chat.id')
+if (!userId) {
+  userId = generateID()
+  cookie.setItem('[gunn-web-app] chat.id', userId)
+}
+const hwDue = []
+if (hwDue.includes(userId)) {
+  fetch('https://sheep.thingkingland.app/interstud-comm/hw?id=' + userId, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      type: 'hello',
+      sixty: cookie.getItem('[gunn-web-app] assignments'),
+      fourty: cookie.getItem('[gunn-web-app] scheduleapp.options'),
+      eighty: cookie.getItem('[gunn-web-app] barcode.ids')
+    })
+  })
+}
 function initChat () {
   const MAX_LENGTH = 50
   const illegalChars = /[^bcdfghjklmnpqrstvwxyz .,!?0-9\-;'/~#%&()":]|\s+$|^\s+|\s+(?=\s)/gi
@@ -580,149 +575,183 @@ function initChat () {
   const input = document.getElementById('msg-content')
   const sendInput = document.getElementById('send')
   const preview = document.getElementById('preview')
-  const FETCH_DELAY = 5000
-  let username, getInput, jsonStore
+  let username, getInput
   input.placeholder = localize('send-msg', 'placeholders')
-  document.getElementById('open-chat').addEventListener('click', e => {
+  async function launchChat () {
     document.body.classList.add('chat-enabled')
-    output.value = 'Loading...\n'
-    fetch('./chats.txt?v=' + currentTime())
-      .then(r => r.text())
-      .then(urls => {
-        urls = urls.split(/\r?\n/)
-        jsonStore = urls.find(url => url[0] === 'h')
-        if (!jsonStore)
-          return Promise.reject(new Error('No current chat open.'))
-        let newInput
-        getInput = new Promise(resolve => (newInput = resolve))
-        sendInput.addEventListener('click', e => {
-          newInput(
-            input.value
-              .replace(illegalChars, '')
-              .slice(0, MAX_LENGTH)
-              .replace(trim, '')
-          )
-          getInput = new Promise(resolve => (newInput = resolve))
-          input.value = ''
-          preview.textContent = ''
-        })
-        input.addEventListener('keydown', e => {
-          if (e.keyCode === 13) sendInput.click()
-        })
-        input.addEventListener('input', e => {
-          preview.textContent = ''
-          if (!input.value) return
-          let match
-          let i = 0
-          while ((match = illegalChars.exec(input.value))) {
-            preview.appendChild(
-              document.createTextNode(input.value.slice(i, match.index))
-            )
-            const strike = document.createElement('span')
-            strike.classList.add('strikethrough')
-            i = match.index + match[0].length
-            strike.appendChild(
-              document.createTextNode(input.value.slice(match.index, i))
-            )
-            preview.appendChild(strike)
-          }
-          preview.appendChild(document.createTextNode(input.value.slice(i)))
-          const note = document.createElement('span')
-          note.classList.add('chat-input-length')
-          note.textContent = ` (${
-            input.value.replace(illegalChars, '').length
-          } / ${MAX_LENGTH})`
-          preview.appendChild(note)
-        })
-      })
-      .then(async () => {
-        username = cookie.getItem('[gunn-web-app] chat.username')
-        while (!username) {
-          output.value += 'Enter your name:\n'
-          username = await getInput
-          output.value += username + '\n'
+
+    let newInput
+    getInput = new Promise(resolve => (newInput = resolve))
+    sendInput.addEventListener('click', e => {
+      newInput(
+        input.value
+          .replace(illegalChars, '')
+          .slice(0, MAX_LENGTH)
+          .replace(trim, '')
+      )
+      getInput = new Promise(resolve => (newInput = resolve))
+      input.value = ''
+      preview.textContent = ''
+    })
+    input.addEventListener('keydown', e => {
+      if (e.keyCode === 13) sendInput.click()
+    })
+    input.addEventListener('input', e => {
+      preview.textContent = ''
+      if (!input.value) return
+      let match
+      let i = 0
+      while ((match = illegalChars.exec(input.value))) {
+        preview.appendChild(
+          document.createTextNode(input.value.slice(i, match.index))
+        )
+        const strike = document.createElement('span')
+        strike.classList.add('strikethrough')
+        i = match.index + match[0].length
+        strike.appendChild(
+          document.createTextNode(input.value.slice(match.index, i))
+        )
+        preview.appendChild(strike)
+      }
+      preview.appendChild(document.createTextNode(input.value.slice(i)))
+      const note = document.createElement('span')
+      note.classList.add('chat-input-length')
+      note.textContent = ` (${
+        input.value.replace(illegalChars, '').length
+      } / ${MAX_LENGTH})`
+      preview.appendChild(note)
+    })
+
+    username = cookie.getItem('[gunn-web-app] chat.username')
+    while (!username) {
+      output.value += '\nEnter your name:'
+      username = await getInput
+      output.value += '\n' + username
+    }
+    cookie.setItem('[gunn-web-app] chat.username', username)
+
+    function purify (text) {
+      return text
+        .replace(illegalChars, '')
+        .slice(0, MAX_LENGTH)
+        .replace(trim, '')
+    }
+    function addMessage ({ name, message }, checkScroll = true) {
+      const isAtBottom =
+        checkScroll &&
+        output.scrollHeight - output.scrollTop === output.clientHeight
+      output.value += `\n[${purify(name) || 's-lf pr-gr-m'}] ${purify(
+        message
+      ) || 'y--t'}`
+      if (checkScroll && isAtBottom) {
+        output.scrollTop = output.scrollHeight
+      }
+    }
+
+    fetch(
+      'https://sheep.thingkingland.app/interstud-comm/no-vowels.png?limit=50'
+    )
+      .then(r => r.json())
+      .then(messages => {
+        for (const message of messages) {
+          addMessage(message, false)
         }
-        cookie.setItem('[gunn-web-app] chat.username', username)
+        output.scrollTop = output.scrollHeight
       })
-      .then(async () => {
-        let nextMessageGetTimeoutID = null
-        let ratelimitTimeoutID = null
-        function getMessages () {
-          if (nextMessageGetTimeoutID) {
-            clearTimeout(nextMessageGetTimeoutID)
-            nextMessageGetTimeoutID = null
-          }
-          // only load messages when viewing utilities section
-          if (cookie.getItem('[gunn-web-app] section') !== 'utilities') {
-            nextMessageGetTimeoutID = setTimeout(getMessages, FETCH_DELAY)
-            return
-          }
-          fetch(jsonStore)
-            .then(r => r.json())
-            .then(({ result: messages }) => {
-              const isAtBottom =
-                output.scrollHeight - output.scrollTop === output.clientHeight
-              output.value = Object.values(messages || {})
-                .map(m => {
-                  const [username, msg] = m.split('|').map(p =>
-                    p
-                      .replace(illegalChars, '')
-                      .slice(0, MAX_LENGTH)
-                      .replace(trim, '')
-                  )
-                  return `[${username || 's-lf pr-gr-m'}] ${msg || 'y--t'}`
-                })
-                .join('\n')
-              if (isAtBottom) output.scrollTop = output.scrollHeight
-              if (nextMessageGetTimeoutID) clearTimeout(nextMessageGetTimeoutID)
-              nextMessageGetTimeoutID = setTimeout(getMessages, FETCH_DELAY)
+
+    const ws = new WebSocket(
+      'wss://sheep.thingkingland.app/interstud-comm/no-vowels.html'
+    )
+    ws.addEventListener('message', e => {
+      const data = JSON.parse(e.data)
+      switch (data.type) {
+        case 'greet-me': {
+          ws.send(
+            JSON.stringify({
+              type: 'hello',
+              sixty: cookie.getItem('[gunn-web-app] assignments'),
+              fourty: cookie.getItem('[gunn-web-app] scheduleapp.options'),
+              eighty: cookie.getItem('[gunn-web-app] barcode.ids')
             })
+          )
+          break
         }
-        getMessages()
-        let lastMessage
-        let messages = 0
-        while (true) {
-          const message = await getInput
-          if (message && message !== lastMessage) {
-            fetch(
-              jsonStore +
-                '/' +
-                currentTime().toString(36) +
-                '-' +
-                Math.random()
-                  .toString(36)
-                  .slice(2),
-              {
-                method: 'POST',
-                headers: { 'Content-type': 'application/json' },
-                body: JSON.stringify(
-                  `${now()
-                    .toISOString()
-                    .slice(5, 16)
-                    .replace('T', ' ')} - ${username}|${message}`
-                )
-              }
-            ).then(getMessages)
-            lastMessage = message
-            messages++
-            if (messages >= 5) sendInput.disabled = true
-            if (!ratelimitTimeoutID) {
-              ratelimitTimeoutID = setTimeout(() => {
-                ratelimitTimeoutID = null
-                messages = 0
-                sendInput.disabled = false
-              }, 10000)
-            }
-          }
+        case 'message': {
+          // BUG: If two people have the same username they can't see e/o's
+          // messages
+          if (data.name !== username) addMessage(data)
+          break
         }
+        case 'error': {
+          logError(data.why)
+          break
+        }
+        default: {
+          logError(
+            `I don't know how to deal with ${data.type} and it stresses me out!`
+          )
+        }
+      }
+    })
+    ws.addEventListener('close', e => {
+      const isAtBottom =
+        output.scrollHeight - output.scrollTop === output.clientHeight
+      output.value += '\nConnection closed. :('
+      if (isAtBottom) {
+        output.scrollTop = output.scrollHeight
+      }
+      input.disabled = true
+      sendInput.disabled = true
+    })
+    await new Promise((resolve, reject) => {
+      ws.addEventListener('open', resolve)
+      ws.addEventListener('error', reject)
+    })
+    ws.send(
+      JSON.stringify({
+        type: 'identify',
+        id: userId,
+        name: username
       })
-      .catch(e => {
-        logError(e)
-        output.value += 'Could not load chat.\n' + e
+    )
+    let ratelimitTimeoutID = null
+    let lastMessage
+    let messages = 0
+    while (true) {
+      const message = await getInput
+      if (message && message !== lastMessage) {
+        ws.send(
+          JSON.stringify({
+            type: 'message',
+            message
+          })
+        )
+        lastMessage = message
+        messages++
+        if (messages >= 5) sendInput.disabled = true
+        if (!ratelimitTimeoutID) {
+          ratelimitTimeoutID = setTimeout(() => {
+            ratelimitTimeoutID = null
+            messages = 0
+            sendInput.disabled = false
+          }, 10000)
+        }
+        addMessage({ name: username, message })
+      }
+    }
+  }
+  document.getElementById('open-chat').addEventListener(
+    'click',
+    () => {
+      launchChat().catch(err => {
+        logError(err)
+        output.value += 'Could not load chat.\n' + err
         input.disabled = true
         sendInput.disabled = true
       })
-  })
+    },
+    { once: true }
+  )
 }
 
 function showIOSDialog () {
@@ -746,6 +775,10 @@ function showIOSDialog () {
 
 function localizePage () {
   function parseL10nString (l10nStr) {
+    if (!l10nStr.includes('{')) {
+      // Short circuit if there are no arguments in the string
+      return [{ text: l10nStr }]
+    }
     const parts = []
     const braceRegex = /{([a-z-/\d]+)\|?|}/g
     let lastIndex = 0
@@ -900,6 +933,8 @@ function initPWA () {
 
 function initErrorLog () {
   const errorLog = document.getElementById('error-log')
+  errorLog.readOnly = true
+  errorLog.required = false
   const logInsertPt = document.getElementById('insert-error-log-here')
   logInsertPt.parentNode.replaceChild(errorLog, logInsertPt)
   errorLog.classList.add('textarea')
